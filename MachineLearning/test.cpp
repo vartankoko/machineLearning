@@ -45,15 +45,16 @@ extern "C" {
         return NULL;
     }
     
-    void linear_train_classification(double* w, int wSize, double* parameters, int nbParameters, int parametersLength, double* results, int resultsLength, double alpha, int maxIter) {
-        double** x = (double**) malloc(sizeof(double*) * parametersLength);
+    void linear_train_classification(double* w, double* parameters, int nbParameters, int parametersLength, double* results, int resultsLength, double alpha, int maxIter) {
+        double** x = (double**) malloc(sizeof(double*) * parametersLength / nbParameters);
         int i, j;
         int stop = 0;
-        //bool oneDifferent = false;
+        double diff = 0;
+        auto wSize = nbParameters + 1;
         
         srand(time(NULL));
         
-        for (i = 0; i < parametersLength; i++) {
+        for (i = 0; i < parametersLength / nbParameters; i++) {
             x[i] = (double*) malloc(sizeof(double) * nbParameters + 1);
             
             // paramètre de biais
@@ -64,10 +65,10 @@ extern "C" {
         }
         
         do {
-            int index = rand()%parametersLength;
+            int index = rand()%(parametersLength / nbParameters);
             for (j = 0; j < wSize; j++) {
                 int currentRes = get_current_weights_value(w, x[index], wSize);
-                double diff = results[index] - currentRes;
+                diff = results[index] - currentRes;
                 
                 w[j] = w[j] + alpha * (diff) * x[index][j];
             }
