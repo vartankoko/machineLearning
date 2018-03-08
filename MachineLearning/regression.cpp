@@ -1,56 +1,163 @@
-//
-//  regression.cpp
-//  MachineLearning
-//
-//  Created by Thomas Fouan on 07/03/2018.
-//  Copyright © 2018 Thomas Fouan. All rights reserved.
-//
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
+#include <iostream>
+#include <cstdlib>     /* srand, rand */
+#include <ctime>
 #include "Eigen/Dense"
 
-extern "C" {
-    
-    double* linear_create_regression(int nbParameters) {
-        double* w = (double*) malloc(sizeof(double) * nbParameters);
-        int i;
-        
-        for (i = 0; i < nbParameters; i++) {
-            w[i] = 0.0;
-        }
-        
-        return w;
-    }
-    
-    void linear_train_regression(double* w, double* parameters, int nbParameters, int parametersLength, double* results, int resultsLength) {
-        int i = 0;
-        auto wSize = nbParameters + 1;
-        
-        Eigen::MatrixXd x(parametersLength / nbParameters, nbParameters + 1);
-        
-        for (i = 0; i < parametersLength / nbParameters; i++) {
-            x(i, 0) = 1;
-            for (int j = 0; j < nbParameters; j++) {
-                x(i, j + 1) = parameters[i * nbParameters + j];
-            }
-        }
-        
-        Eigen::MatrixXd y(resultsLength, 1);
-        for (i = 0; i < resultsLength; i++) {
-            y(i, 0) = results[i];
-        }
-        
-        Eigen::MatrixXd xT = x.transpose();
-        Eigen::MatrixXd step1 = xT * x;
-        Eigen::MatrixXd step2 = step1.inverse();
-        Eigen::MatrixXd step3 = step2 * xT;
-        Eigen::MatrixXd matrixW = step3 * y;
-        //Eigen::MatrixXd matrixW = ((xT * x).inverse() * xT) * y;
-        
-        for (i = 0; i < wSize; i++) {
-            w[i] = matrixW(i, 0);
-        }
-    }
+extern "C"
+{
+	int sign(double w[], double x[], int size) {
+
+		double sum = 0;
+		for (int i = 1; i < size; i++) {
+			sum += w[i] * x[i];
+		}
+		sum += w[0];
+
+		if (sum > 0)
+			return 1;
+		else if (sum < 0)
+			return -1;
+		return 0;
+	}
+
+	double *generateWeight(int size, int minRange, int maxRange) {
+		double *w = (double *)malloc(sizeof(double) * size);
+		srand(time(NULL));
+		for (int i = 0; i < size; i++) {
+			w[i] = rand() % maxRange + minRange;
+		}
+		return w;
+	}
+
+	double *generateRosenBlatt(int size) {
+		return generateWeight(size, -1, 2);
+	}
+
+	double *executeRosenBlatt(double w[], double point[], int size) {
+		double alpha = 0.1;
+		int signPoint = sign(w, point, size);
+		while (signPoint != point[0]) {
+			for (int i = 1; i < size; i++) {
+				w[i] = w[i] + (alpha * (point[0] - signPoint)) * point[i];
+			}
+			w[0] = w[0] + (alpha * (point[0] - signPoint));
+			int signPoint = sign(w, point, size);
+		}
+		return w;
+	}
+
+	double *executeLinear2(int size, double points[], int nbrPoints) {
+		double *w = generateRosenBlatt(size);
+		for (int i = 0; i < nbrPoints; i++) {
+			double * point = (double *)malloc(sizeof(double) * size);
+			for (int j = 0; j < size; j++) {
+				point[j] = points[(i * size) + j];
+			}
+			executeRosenBlatt(w, point, size);
+
+		}
+
+		return w;
+	}
+	__declspec(dllexport) double *generateModel(int size) {
+		double *w = (double *)malloc(sizeof(double) * size);
+		srand(time(NULL));
+		for (int i = 0; i < size; i++) {
+			double f = (double)rand() / RAND_MAX;
+			w[i] = i; //-1.0 + f * (2.0);
+			//w[i] = (double)rand() % 2 + -1.0;
+		}
+		return w;
+	}
+
+	__declspec(dllexport) double *trainLinear(double  w[], int size, double points[], int nbrPoints) {
+
+		int cpt = 0;
+		bool find = true;
+		while (cpt < 100000 && find == true) {
+			find = false;
+			for (int i = 0; i < nbrPoints; i++) {
+				double * point = (double *)malloc(sizeof(double) * size);
+				for (int j = 0; j < size; j++) {
+					point[j] = points[(i * size) + j];
+				}
+				double alpha = 0.1;
+				int signPoint = sign(w, point, size);		
+				while (signPoint != point[0]) {
+					find = true;
+					for (int i = 1; i < size; i++) {
+						w[i] = w[i] + (alpha * (point[0] - signPoint) * point[i]);
+					}
+					w[0] = w[0] + (alpha * (point[0] - signPoint));
+					signPoint = sign(w, point, size);
+				}
+				free(point);
+			}
+			cpt++;
+		}
+		return w;
+	}
+
+	__declspec(dllexport) double* executeLinear(double w[], int size, double points[], int nbr_points) {
+		for (int i = 0; i < nbr_points; i++) {
+			double * point = (double *)malloc(sizeof(double) * size);
+
+			for (int j = 0; j < size; j++) {
+				point[j] = points[(i * size) + j];
+			}
+			points[(i * size)] = sign(w, point, size);
+		}
+		return points;
+
+	}
+
+	__declspec(dllexport) double * train_linear_regression(double points[], int nbTrainingSphere, int sizeW) {
+
+		Eigen::MatrixXd x(nbTrainingSphere, (sizeW));
+		Eigen::MatrixXd y(nbTrainingSphere, 1);
+
+		for (int i = 0; i < nbTrainingSphere; i++) {
+			x(i, 0) = 1;
+			y(i, 0) = points[i * (sizeW )];
+
+			for (int j = 1; j<(sizeW); j++) {
+				x(i, j) = points[i * (sizeW) + j];
+			}
+		}
+
+		Eigen::MatrixXd xT = x.transpose();
+		Eigen::MatrixXd xTx = xT * x;
+		Eigen::MatrixXd xTxInv = xTx.inverse();
+		Eigen::MatrixXd xTxInvXT = xTxInv * xT;
+		Eigen::MatrixXd matrixW = xTxInvXT * y;
+
+		double * w = (double*)malloc(sizeof(double)*sizeW);
+		for (int i = 0; i < sizeW; i++) {
+			w[i] = matrixW(i, 0);
+		}
+		return w;
+	}
+
+
+	__declspec(dllexport) double execRegression(double w[], double x[], int size) {
+
+		double sum = 0;
+		for (int i = 1; i < size; i++) {
+			sum += w[i] * x[i];
+		}
+		sum += w[0];
+		
+		return sum;
+	}
+
+
+	__declspec(dllexport) int evaluateLinear(double w[], int size, double point[]) {
+
+		return sign(w, point, size);
+	}
+
+
+	__declspec(dllexport) int hello() {
+		return 10;
+	}
 }
